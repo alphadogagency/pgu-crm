@@ -2,6 +2,7 @@ import { NavLink, Link, useParams } from 'react-router-dom';
 import { useState } from 'react';
 import { getStop } from '../data/stops';
 import SocialLinks from './SocialLinks';
+import { lock } from '../utils/auth';
 
 const navItems = [
   { to: '',             label: 'Dashboard',          icon: '📊', end: true },
@@ -40,9 +41,14 @@ export default function Layout({ children }) {
             </>
           )}
         </div>
-        <Link to="/" className="text-xs text-pgu-gold hover:text-pgu-gold-light font-medium transition-colors hidden lg:block">
-          ← All Stops
-        </Link>
+        <div className="hidden lg:flex items-center gap-4">
+          <Link to="/" className="text-xs text-pgu-gold hover:text-pgu-gold-light font-medium transition-colors">
+            ← All Stops
+          </Link>
+          <button onClick={lock} className="text-xs text-white/30 hover:text-white/60 transition-colors cursor-pointer" title="Lock app">
+            🔒 Lock
+          </button>
+        </div>
         <div className="w-8 lg:hidden" />
       </header>
 

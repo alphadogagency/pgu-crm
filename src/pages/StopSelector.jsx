@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { STOPS } from '../data/stops';
 import SocialLinks from '../components/SocialLinks';
+import { lock } from '../utils/auth';
 
 const LEVEL_VALUES = { Platinum: 2000, Gold: 1000, Silver: 500, Bronze: 250 };
 
@@ -84,10 +85,15 @@ export default function StopSelector() {
   return (
     <div className="min-h-screen bg-pgu-navy flex flex-col">
       {/* Header */}
-      <header className="px-6 py-5 flex items-center gap-4 border-b border-white/10">
-        <img src="/primary-logo.png" alt="Point Guard U" className="h-10 brightness-0 invert" />
-        <div className="h-6 w-px bg-pgu-gold" />
-        <span className="text-pgu-gold font-semibold tracking-wide">2026 Tour Hub</span>
+      <header className="px-6 py-5 flex items-center justify-between border-b border-white/10">
+        <div className="flex items-center gap-4">
+          <img src="/primary-logo.png" alt="Point Guard U" className="h-10 brightness-0 invert" />
+          <div className="h-6 w-px bg-pgu-gold" />
+          <span className="text-pgu-gold font-semibold tracking-wide">2026 Tour Hub</span>
+        </div>
+        <button onClick={lock} className="text-xs text-white/30 hover:text-white/60 transition-colors cursor-pointer" title="Lock app">
+          🔒 Lock
+        </button>
       </header>
 
       {/* Content */}
