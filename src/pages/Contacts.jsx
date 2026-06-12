@@ -6,7 +6,7 @@ const ROLES = ['All', 'Coach', 'Key Personnel', 'Sponsor', 'On-Site', 'Other'];
 
 export default function Contacts() {
   const { data, update, generateId } = useStopContext();
-  const contacts = data.contacts || [];
+  const contacts = useMemo(() => data.contacts || [], [data.contacts]);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({});
   const [search, setSearch] = useState('');

@@ -138,3 +138,22 @@ export function createSeedData(stopId) {
   if (stopId === 'goodland') return goodlandSeed();
   return emptyStop(stopId);
 }
+
+export function fillMissingStopSections(stopId, stopData) {
+  const seed = createSeedData(stopId);
+  if (!stopData || typeof stopData !== 'object' || Array.isArray(stopData)) {
+    return { data: seed, changed: true };
+  }
+
+  let changed = false;
+  const nextData = { ...stopData };
+
+  for (const section of Object.keys(seed)) {
+    if (!(section in nextData)) {
+      nextData[section] = seed[section];
+      changed = true;
+    }
+  }
+
+  return { data: nextData, changed };
+}

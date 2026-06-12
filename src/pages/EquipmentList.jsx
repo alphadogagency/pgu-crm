@@ -1,24 +1,6 @@
 import { useState } from 'react';
 import { useStopContext } from '../context/StopDataContext';
-
-// ─── Shared custom-item library (lives outside any individual stop) ───────────
-const LIBRARY_KEY = 'pgu-equipment-library';
-
-function readLibrary() {
-  try {
-    const raw = window.localStorage.getItem(LIBRARY_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-function addToLibrary(itemName) {
-  const lib = readLibrary();
-  if (!lib.map((s) => s.toLowerCase()).includes(itemName.toLowerCase())) {
-    lib.push(itemName);
-    window.localStorage.setItem(LIBRARY_KEY, JSON.stringify(lib));
-  }
-}
-// ─────────────────────────────────────────────────────────────────────────────
+import { useEquipmentLibrary } from '../hooks/useEquipmentLibrary';
 
 const DEFAULT_ITEMS = [
   'Basketballs', 'Ball Cart / Rack', 'Cones', 'Pinnies / Scrimmage Vests',
@@ -36,11 +18,11 @@ function generateId() {
 export default function EquipmentList() {
   const { data, update } = useStopContext();
   const list = data.equipmentList || [];
+  const { library, addToLibrary, error: libraryError } = useEquipmentLibrary();
 
   const [newItem, setNewItem]         = useState('');
   const [editingNotes, setEditingNotes] = useState(null);
   const [notesValue, setNotesValue]   = useState('');
-  const [library, setLibrary]         = useState(readLibrary);
 
   const packed = list.filter((i) => i.checked).length;
   const total  = list.length;
@@ -59,7 +41,6 @@ export default function EquipmentList() {
       { id: generateId(), item: trimmed, checked: false, notes: '' },
     ]);
     addToLibrary(trimmed);
-    setLibrary(readLibrary()); // refresh local state so chip appears instantly in other sections
     setNewItem('');
   };
 
@@ -169,6 +150,12 @@ export default function EquipmentList() {
             ))}
           </div>
         </div>
+      )}
+
+      {libraryError && (
+        <p className="text-xs text-red-600">
+          Equipment library could not sync: {libraryError}
+        </p>
       )}
 
       {/* Item list */}

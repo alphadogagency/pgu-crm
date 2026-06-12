@@ -1,43 +1,82 @@
-import { useState, useCallback } from 'react';
-import { createSeedData, generateId } from '../data/seedData';
-
-function readStop(stopId) {
-  try {
-    const raw = window.localStorage.getItem(`pgu-stop-${stopId}`);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
-function writeStop(stopId, data) {
-  window.localStorage.setItem(`pgu-stop-${stopId}`, JSON.stringify(data));
-}
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { createSeedData, fillMissingStopSections, generateId } from '../data/seedData';
+import {
+  createStopIfMissing,
+  fetchStopData,
+  subscribeToStopData,
+  updateStopSection,
+  upsertStopData,
+} from '../lib/sharedData';
 
 export function useStopData(stopId) {
-  const [data, setData] = useState(() => {
-    // If any data exists for this stop, always use it — no exceptions
-    const existing = readStop(stopId);
-    if (existing) return existing;
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const dataRef = useRef(null);
 
-    // Truly first visit — seed once and never again
-    const seed = createSeedData(stopId);
-    writeStop(stopId, seed);
-    window.localStorage.setItem(`pgu-seeded-v1-${stopId}`, 'true');
-    return seed;
-  });
+  const setSharedData = useCallback((nextData) => {
+    dataRef.current = nextData;
+    setData(nextData);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadStop() {
+      setLoading(true);
+      setError('');
+
+      try {
+        let nextData = await fetchStopData(stopId);
+        if (!nextData) {
+          nextData = await createStopIfMissing(stopId, createSeedData(stopId));
+        } else {
+          const normalized = fillMissingStopSections(stopId, nextData);
+          nextData = normalized.data;
+          if (normalized.changed) {
+            await upsertStopData(stopId, nextData);
+          }
+        }
+        if (!active) return;
+        setSharedData(nextData);
+      } catch (err) {
+        if (active) setError(err.message);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    loadStop();
+
+    const unsubscribe = subscribeToStopData(stopId, (nextData) => {
+      setSharedData(fillMissingStopSections(stopId, nextData).data);
+      setError('');
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [reloadKey, setSharedData, stopId]);
 
   const update = useCallback((section, updater) => {
-    setData((prev) => {
-      const next = {
-        ...prev,
-        [section]: typeof updater === 'function' ? updater(prev[section]) : updater,
-      };
-      writeStop(stopId, next);
-      return next;
-    });
-  }, [stopId]);
+    const previous = dataRef.current;
+    if (!previous) return;
 
-  return { data, update, generateId };
+    const nextSection = typeof updater === 'function' ? updater(previous[section]) : updater;
+    const nextData = { ...previous, [section]: nextSection };
+    setSharedData(nextData);
+
+    updateStopSection(stopId, section, nextSection).catch((err) => {
+      setSharedData(previous);
+      setError(err.message);
+    });
+  }, [setSharedData, stopId]);
+
+  const reload = useCallback(() => {
+    setReloadKey((key) => key + 1);
+  }, []);
+
+  return { data, loading, error, reload, update, generateId };
 }

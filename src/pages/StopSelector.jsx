@@ -1,41 +1,30 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { STOPS } from '../data/stops';
+import { fillMissingStopSections } from '../data/seedData';
 import SocialLinks from '../components/SocialLinks';
 import { lock } from '../utils/auth';
+import { SUPABASE_CONFIG_ERROR, isSupabaseConfigured } from '../lib/supabaseClient';
+import { fetchAllStopData, subscribeToAllStopData, upsertManyStopData } from '../lib/sharedData';
 
 const LEVEL_VALUES = { Platinum: 2000, Gold: 1000, Silver: 500, Bronze: 250 };
+const KNOWN_STOP_IDS = new Set(STOPS.map((stop) => stop.id));
 
-function getTotalCashSponsorship() {
+function getTotalCashSponsorship(stopsData) {
   let total = 0;
-  for (const stop of STOPS) {
-    try {
-      const raw = window.localStorage.getItem(`pgu-stop-${stop.id}`);
-      if (!raw) continue;
-      const data = JSON.parse(raw);
-      const cashSponsors = (data.sponsors || []).filter(
-        (s) => s.sponsorType === 'Cash' && s.status === 'Confirmed'
-      );
-      for (const s of cashSponsors) {
-        total += LEVEL_VALUES[s.level] || 0;
-      }
-    } catch {
-      // skip
+  for (const data of Object.values(stopsData)) {
+    const cashSponsors = (data?.sponsors || []).filter(
+      (s) => s.sponsorType === 'Cash' && s.status === 'Confirmed',
+    );
+    for (const sponsor of cashSponsors) {
+      total += LEVEL_VALUES[sponsor.level] || 0;
     }
   }
   return total;
 }
 
-function exportAllData() {
-  const exportData = { exportedAt: new Date().toISOString(), stops: {} };
-  for (const stop of STOPS) {
-    try {
-      const raw = window.localStorage.getItem(`pgu-stop-${stop.id}`);
-      if (raw) exportData.stops[stop.id] = JSON.parse(raw);
-    } catch {
-      // skip
-    }
-  }
+function downloadBackup(stopsData) {
+  const exportData = { exportedAt: new Date().toISOString(), stops: stopsData };
   const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -48,38 +37,123 @@ function exportAllData() {
   URL.revokeObjectURL(url);
 }
 
-function importAllData(file, onDone) {
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try {
-      const parsed = JSON.parse(e.target.result);
-      const stops = parsed.stops || parsed; // support both new and raw formats
-      let count = 0;
-      for (const stopId of Object.keys(stops)) {
-        window.localStorage.setItem(`pgu-stop-${stopId}`, JSON.stringify(stops[stopId]));
-        count++;
+function readBackupFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        resolve(JSON.parse(e.target.result));
+      } catch {
+        reject(new Error('Could not read backup file. Make sure it is a valid PGU Tour Hub backup.'));
       }
-      onDone(count);
-    } catch {
-      alert('Could not read backup file. Make sure it is a valid PGU Tour Hub backup.');
-    }
-  };
-  reader.readAsText(file);
+    };
+    reader.onerror = () => reject(new Error('Could not read backup file.'));
+    reader.readAsText(file);
+  });
+}
+
+function getImportableStops(parsed) {
+  const stops = parsed?.stops || parsed;
+  if (!stops || typeof stops !== 'object' || Array.isArray(stops)) {
+    throw new Error('Backup file does not contain PGU stop data.');
+  }
+
+  return Object.fromEntries(
+    Object.entries(stops).filter(([stopId, stopData]) => (
+      KNOWN_STOP_IDS.has(stopId) &&
+      stopData &&
+      typeof stopData === 'object' &&
+      !Array.isArray(stopData)
+    )),
+  );
+}
+
+async function importAllData(file) {
+  const parsed = await readBackupFile(file);
+  const stops = getImportableStops(parsed);
+  const count = Object.keys(stops).length;
+  if (count === 0) {
+    throw new Error('Backup file did not include any known PGU tour stops.');
+  }
+
+  const normalizedStops = Object.fromEntries(
+    Object.entries(stops).map(([stopId, stopData]) => [
+      stopId,
+      fillMissingStopSections(stopId, stopData).data,
+    ]),
+  );
+
+  await upsertManyStopData(normalizedStops);
+  return count;
 }
 
 export default function StopSelector() {
-  const totalCash = getTotalCashSponsorship();
   const importRef = useRef(null);
+  const [stopsData, setStopsData] = useState({});
+  const [loadingData, setLoadingData] = useState(true);
+  const [dataError, setDataError] = useState(isSupabaseConfigured ? '' : SUPABASE_CONFIG_ERROR);
   const [importMsg, setImportMsg] = useState('');
 
-  function handleImport(e) {
+  const loadSharedData = useCallback(async () => {
+    if (!isSupabaseConfigured) {
+      setLoadingData(false);
+      setDataError(SUPABASE_CONFIG_ERROR);
+      return;
+    }
+
+    setLoadingData(true);
+    try {
+      setStopsData(await fetchAllStopData());
+      setDataError('');
+    } catch (err) {
+      setDataError(err.message);
+    } finally {
+      setLoadingData(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSharedData();
+
+    if (!isSupabaseConfigured) return undefined;
+
+    return subscribeToAllStopData((stopId, stopData) => {
+      if (!stopId) return;
+      setStopsData((prev) => {
+        if (stopData === null) {
+          const next = { ...prev };
+          delete next[stopId];
+          return next;
+        }
+        return { ...prev, [stopId]: stopData };
+      });
+    });
+  }, [loadSharedData]);
+
+  const totalCash = useMemo(() => getTotalCashSponsorship(stopsData), [stopsData]);
+
+  function handleExport() {
+    if (dataError) {
+      alert(dataError);
+      return;
+    }
+    downloadBackup(stopsData);
+  }
+
+  async function handleImport(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    importAllData(file, (count) => {
-      setImportMsg(`Restored ${count} stop(s) successfully! Refreshing…`);
-      setTimeout(() => window.location.reload(), 1500);
-    });
-    e.target.value = '';
+
+    try {
+      setImportMsg('');
+      const count = await importAllData(file);
+      await loadSharedData();
+      setImportMsg(`Imported ${count} stop(s) into Supabase successfully.`);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      e.target.value = '';
+    }
   }
 
   return (
@@ -136,6 +210,12 @@ export default function StopSelector() {
               ${totalCash.toLocaleString()}
             </span>
           </p>
+          {loadingData && !dataError && (
+            <p className="text-white/30 text-xs mt-2">Loading shared totals...</p>
+          )}
+          {dataError && (
+            <p className="max-w-xl text-red-300 text-xs mt-3">{dataError}</p>
+          )}
         </div>
 
         {/* Backup Controls */}
@@ -143,14 +223,16 @@ export default function StopSelector() {
           <p className="text-white/30 text-xs uppercase tracking-widest">Data Backup</p>
           <div className="flex gap-3">
             <button
-              onClick={exportAllData}
-              className="flex items-center gap-2 px-4 py-2 bg-pgu-gold/10 hover:bg-pgu-gold/20 border border-pgu-gold/30 hover:border-pgu-gold/60 text-pgu-gold text-sm font-medium rounded-lg transition-all duration-200"
+              onClick={handleExport}
+              disabled={loadingData || Boolean(dataError)}
+              className="flex items-center gap-2 px-4 py-2 bg-pgu-gold/10 hover:bg-pgu-gold/20 border border-pgu-gold/30 hover:border-pgu-gold/60 text-pgu-gold text-sm font-medium rounded-lg transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               ⬇ Export Backup
             </button>
             <button
               onClick={() => importRef.current?.click()}
-              className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/20 hover:border-white/40 text-white/70 hover:text-white text-sm font-medium rounded-lg transition-all duration-200"
+              disabled={loadingData || Boolean(dataError)}
+              className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/20 hover:border-white/40 text-white/70 hover:text-white text-sm font-medium rounded-lg transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               ⬆ Import Backup
             </button>
@@ -165,7 +247,7 @@ export default function StopSelector() {
           {importMsg && (
             <p className="text-green-400 text-sm font-medium">{importMsg}</p>
           )}
-          <p className="text-white/20 text-xs">Export saves all stops to a JSON file. Import restores from that file.</p>
+          <p className="text-white/20 text-xs">Export saves shared Supabase data. Import restores a PGU backup into Supabase.</p>
         </div>
 
         {/* Social Links */}
