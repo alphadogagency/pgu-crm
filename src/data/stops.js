@@ -33,7 +33,7 @@ export const STOPS = [
     label: 'South Bend, IN',
     dates: 'June 29 – July 2',
     venue: 'Mishawaka Fieldhouse',
-    slotsPerDay: { Monday: 6, Tuesday: 6, Wednesday: 6, Thursday: 5 },
+    slotsPerDay: { Monday: 7, Tuesday: 7, Wednesday: 7, Thursday: 6 },
   },
 ];
 

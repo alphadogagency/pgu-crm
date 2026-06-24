@@ -25,6 +25,21 @@ export default function CoachingSchedule() {
     setEditing(null);
   };
 
+  const addMissingSlots = () => {
+    const { slotsPerDay } = stop;
+    update('coachingSchedule', (prev) => {
+      const next = [...prev];
+      for (const day of DAYS) {
+        const existing = next.filter((s) => s.day === day).length;
+        const target = slotsPerDay[day] || 0;
+        for (let i = existing + 1; i <= target; i++) {
+          next.push({ id: generateId(), day, slotNumber: i, coachName: '', contactInfo: '', status: 'Need' });
+        }
+      }
+      return next;
+    });
+  };
+
   // Rebuild the coaching schedule from the stop's slotsPerDay config.
   // Only touches coachingSchedule — all other stop data is untouched.
   const resetSchedule = () => {
@@ -51,12 +66,20 @@ export default function CoachingSchedule() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-pgu-navy">Coaching Schedule</h2>
-        <button
-          onClick={resetSchedule}
-          className="text-xs text-pgu-gray border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
-        >
-          Reset Schedule
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={addMissingSlots}
+            className="text-xs text-pgu-navy border border-pgu-navy px-3 py-1.5 rounded-lg hover:bg-pgu-navy hover:text-white transition-colors cursor-pointer"
+          >
+            + Add Missing Slots
+          </button>
+          <button
+            onClick={resetSchedule}
+            className="text-xs text-pgu-gray border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+          >
+            Reset Schedule
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
