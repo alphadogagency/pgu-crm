@@ -11,12 +11,12 @@ export default function CoachRoster() {
   const [form, setForm] = useState({});
 
   const openNew = () => {
-    setForm({ name: '', contactInfo: '', shirtSize: '', notes: '' });
+    setForm({ name: '', contactInfo: '', email: '', shirtSize: '', notes: '' });
     setEditing('new');
   };
 
   const openEdit = (c) => {
-    setForm({ name: c.name, contactInfo: c.contactInfo || '', shirtSize: c.shirtSize || '', notes: c.notes || '' });
+    setForm({ name: c.name, contactInfo: c.contactInfo || '', email: c.email || '', shirtSize: c.shirtSize || '', notes: c.notes || '' });
     setEditing(c.id);
   };
 
@@ -49,6 +49,7 @@ export default function CoachRoster() {
             <tr className="bg-gray-50 border-b border-gray-200">
               <th className="text-left px-4 py-3 font-semibold text-pgu-gray">Name</th>
               <th className="text-left px-4 py-3 font-semibold text-pgu-gray">Cell Number</th>
+              <th className="text-left px-4 py-3 font-semibold text-pgu-gray">Email</th>
               <th className="text-left px-4 py-3 font-semibold text-pgu-gray">Shirt Size</th>
               <th className="text-left px-4 py-3 font-semibold text-pgu-gray">Notes</th>
               <th className="text-right px-4 py-3 font-semibold text-pgu-gray">Actions</th>
@@ -59,6 +60,11 @@ export default function CoachRoster() {
               <tr key={coach.id} className="border-b border-gray-100 hover:bg-gray-50">
                 <td className="px-4 py-3 font-medium text-pgu-navy">{coach.name}</td>
                 <td className="px-4 py-3 text-pgu-gray">{coach.contactInfo || '—'}</td>
+                <td className="px-4 py-3 text-pgu-gray">
+                  {coach.email ? (
+                    <a href={`mailto:${coach.email}`} className="text-pgu-gold hover:underline">{coach.email}</a>
+                  ) : '—'}
+                </td>
                 <td className="px-4 py-3 text-pgu-gray">{coach.shirtSize || '—'}</td>
                 <td className="px-4 py-3 text-pgu-gray">{coach.notes || '—'}</td>
                 <td className="px-4 py-3 text-right space-x-2">
@@ -69,7 +75,7 @@ export default function CoachRoster() {
             ))}
             {roster.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-pgu-gray">No coaches yet.</td>
+                <td colSpan={6} className="px-4 py-8 text-center text-pgu-gray">No coaches yet.</td>
               </tr>
             )}
           </tbody>
@@ -93,6 +99,16 @@ export default function CoachRoster() {
               placeholder="(000) 000-0000"
               value={form.contactInfo || ''}
               onChange={(e) => setForm({ ...form, contactInfo: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-pgu-gray mb-1">Email</label>
+            <input
+              type="email"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              placeholder="coach@example.com"
+              value={form.email || ''}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
             />
           </div>
           <div>
