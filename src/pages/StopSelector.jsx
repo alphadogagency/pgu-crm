@@ -190,13 +190,12 @@ export default function StopSelector() {
               to={`/${stop.id}`}
               className="group bg-white/5 hover:bg-white/10 border border-white/10 hover:border-pgu-gold/50 rounded-xl p-6 transition-all duration-200"
             >
-              <div className="flex items-start justify-between mb-4">
+              <div className="flex items-start justify-between">
                 <h2 className="text-xl font-bold text-white group-hover:text-pgu-gold transition-colors">
                   {stop.name} <span className="text-white/50 text-sm font-normal">{stop.state}</span>
                 </h2>
                 <span className="text-white/30 group-hover:text-pgu-gold text-2xl transition-colors">→</span>
               </div>
-              <p className="text-sm text-pgu-gold font-medium">{stop.dates}</p>
             </Link>
           ))}
         </div>
